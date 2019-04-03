@@ -18,6 +18,7 @@ func TestParse(t *testing.T) {
 		{"Simple String", "+OK\r\n", &Message{Type: TypeSimpleString, String: "OK"}},
 		{"Error", "-Error message\r\n", &Message{Type: TypeError, Error: "Error message"}},
 		{"Int", ":1000\r\n", &Message{Type: TypeInt, Int: 1000}},
+		{"Negative Int", ":-1000\r\n", &Message{Type: TypeInt, Int: -1000}},
 		{"Bulk String", "$6\r\nfoobar\r\n", &Message{Type: TypeBulkString, Bulk: []byte("foobar")}},
 		{"Empty Bulk String", "$0\r\n\r\n", &Message{Type: TypeBulkString, Bulk: []byte("")}},
 		{"Null Bulk String", "$-1\r\n", &Message{Type: TypeBulkString, Bulk: nil}},
