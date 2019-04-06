@@ -1,13 +1,76 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestWriteMessage(t *testing.T) {
+	var tests = []struct {
+		name     string
+		expected string
+		given    *Message
+	}{
+		{"write simple string", "+OK\r\n", &Message{Type: TypeSimpleString, String: "OK"}},
+		{"write error", "-Error message\r\n", &Message{Type: TypeError, Error: "Error message"}},
+		{"write int", ":1000\r\n", &Message{Type: TypeInt, Int: 1000}},
+		{"write bulk string", "$6\r\nfoobar\r\n", &Message{Type: TypeBulkString, Bulk: []byte("foobar")}},
+		{"write empty bulk string", "$0\r\n\r\n", &Message{Type: TypeBulkString, Bulk: []byte("")}},
+		{"write null bulk string", "$-1\r\n", &Message{Type: TypeBulkString, Bulk: nil}},
+		{"write array", "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", &Message{
+			Type: TypeArray,
+			Array: []*Message{
+				{Type: TypeBulkString, Bulk: []byte("foo")},
+				{Type: TypeBulkString, Bulk: []byte("bar")},
+			},
+		}},
+		{"write empty array", "*0\r\n", &Message{
+			Type:  TypeArray,
+			Array: []*Message{},
+		}},
+		{"write null array", "*-1\r\n", &Message{
+			Type:  TypeArray,
+			Array: nil,
+		}},
+		{"write array with null elements", "*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n", &Message{
+			Type: TypeArray,
+			Array: []*Message{
+				{Type: TypeBulkString, Bulk: []byte("foo")},
+				{Type: TypeBulkString, Bulk: nil},
+				{Type: TypeBulkString, Bulk: []byte("bar")},
+			},
+		}},
+		{"write array of arrays", "*2\r\n*3\r\n:1\r\n:2\r\n:3\r\n*2\r\n+Foo\r\n-Bar\r\n", &Message{
+			Type: TypeArray,
+			Array: []*Message{
+				{Type: TypeArray, Array: []*Message{
+					{Type: TypeInt, Int: 1},
+					{Type: TypeInt, Int: 2},
+					{Type: TypeInt, Int: 3},
+				}},
+				{Type: TypeArray, Array: []*Message{
+					{Type: TypeSimpleString, String: "Foo"},
+					{Type: TypeError, Error: "Bar"},
+				}},
+			},
+		}},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			var b strings.Builder
+			w := NewWriter(&b)
+			err := w.WriteMessage(tt.given)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.expected, b.String())
+		})
+	}
+}
 
 func TestParse(t *testing.T) {
 	var tests = []struct {
@@ -125,6 +188,6 @@ func benchmarkParse(in string, b *testing.B) {
 	result = r
 }
 
-func newReader(val string) *bufio.Reader {
-	return bufio.NewReader(bytes.NewReader([]byte(val)))
+func newReader(val string) *bytes.Reader {
+	return bytes.NewReader([]byte(val))
 }

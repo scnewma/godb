@@ -1,8 +1,10 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"errors"
+	"io"
+	"strconv"
 )
 
 const (
@@ -11,6 +13,9 @@ const (
 	TypeInt          byte = ':'
 	TypeBulkString   byte = '$'
 	TypeArray        byte = '*'
+
+	CR byte = '\r'
+	LF byte = '\n'
 )
 
 type Message struct {
@@ -22,11 +27,74 @@ type Message struct {
 	Array  []*Message
 }
 
-type Parser struct {
-	r *bufio.Reader
+type Writer struct {
+	w io.Writer
 }
 
-func NewParser(r *bufio.Reader) *Parser {
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{w}
+}
+
+func (w *Writer) Write(p []byte) (n int, err error) {
+	return w.w.Write(p)
+}
+
+func (w *Writer) WriteMessage(msg *Message) error {
+	var b bytes.Buffer
+	w.write(msg, &b)
+
+	_, err := b.WriteTo(w)
+	return err
+}
+
+func (w *Writer) write(msg *Message, b *bytes.Buffer) {
+	b.WriteByte(msg.Type)
+	switch msg.Type {
+	case TypeSimpleString:
+		b.WriteString(msg.String)
+		b.WriteByte(CR)
+		b.WriteByte(LF)
+	case TypeError:
+		b.WriteString(msg.Error)
+		b.WriteByte(CR)
+		b.WriteByte(LF)
+	case TypeInt:
+		b.WriteString(strconv.FormatInt(msg.Int, 10))
+		b.WriteByte(CR)
+		b.WriteByte(LF)
+	case TypeBulkString:
+		if msg.Bulk == nil {
+			b.WriteString("-1")
+		} else {
+			b.WriteString(strconv.Itoa(len(msg.Bulk)))
+			b.WriteByte(CR)
+			b.WriteByte(LF)
+			b.Write(msg.Bulk)
+		}
+		b.WriteByte(CR)
+		b.WriteByte(LF)
+	case TypeArray:
+		if msg.Array == nil {
+			b.WriteString("-1")
+			b.WriteByte(CR)
+			b.WriteByte(LF)
+		} else {
+			b.WriteString(strconv.Itoa(len(msg.Array)))
+			b.WriteByte(CR)
+			b.WriteByte(LF)
+
+			for _, m := range msg.Array {
+				w.write(m, b)
+			}
+		}
+	}
+}
+
+type Parser struct {
+	r *bytes.Reader
+}
+
+func NewParser(r *bytes.Reader) *Parser {
 	return &Parser{r: r}
 }
 
@@ -101,10 +169,13 @@ func (p *Parser) parseBulkString() (*Message, error) {
 		}, nil
 	}
 
-	bulk, err := p.readToLF()
+	bulk, err := p.readNext(bLen)
 	if err != nil {
 		return nil, err
 	}
+
+	// discard \r\n
+	p.r.Seek(2, io.SeekCurrent)
 
 	return &Message{
 		Type: TypeBulkString,
@@ -126,7 +197,8 @@ func (p *Parser) parseArray() (*Message, error) {
 	}
 
 	msgs := make([]*Message, aLen)
-	for i := 0; i < int(aLen); i++ {
+	var i int64
+	for i = 0; i < aLen; i++ {
 		msg, err := p.Parse()
 		if err != nil {
 			return nil, err
@@ -142,11 +214,38 @@ func (p *Parser) parseArray() (*Message, error) {
 }
 
 func (p *Parser) readToLF() ([]byte, error) {
-	line, err := p.r.ReadBytes('\n')
-	if err != nil {
-		return nil, err
+	buf := make([]byte, 4096)
+	i := 0
+	for {
+		b, err := p.r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+
+		if b == '\r' {
+			p.r.Seek(1, io.SeekCurrent) // discard \n
+			break
+		}
+
+		buf[i] = b
+		i++
 	}
-	return line[:len(line)-2], err
+
+	return buf[:i], nil
+}
+
+func (p *Parser) readNext(bLen int64) ([]byte, error) {
+	buf := make([]byte, bLen)
+	var i int64
+	for i = 0; i < bLen; i++ {
+		b, err := p.r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+
+		buf[i] = b
+	}
+	return buf, nil
 }
 
 func (p *Parser) readInt() (int64, error) {
@@ -166,7 +265,7 @@ func (p *Parser) readInt() (int64, error) {
 		}
 
 		if b == '\r' {
-			p.r.Discard(1) // discard \n
+			p.r.Seek(1, io.SeekCurrent) // discard \n
 			break
 		}
 
