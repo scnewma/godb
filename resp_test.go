@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"strings"
 	"testing"
@@ -152,6 +153,6 @@ func benchmarkParse(in string, b *testing.B) {
 	result = r
 }
 
-func newReader(val string) *bytes.Reader {
-	return bytes.NewReader([]byte(val))
+func newReader(val string) *bufio.Reader {
+	return bufio.NewReader(bytes.NewReader([]byte(val)))
 }
