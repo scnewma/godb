@@ -1,35 +1,36 @@
-package main
+package inmem
 
 import (
 	"testing"
 
+	"github.com/scnewma/godb/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGetSet(t *testing.T) {
-	db := NewDB()
+	db := NewStorage()
 
-	db.Set("test", NewNode("value"))
+	db.Set("test", storage.NewNode("value"))
 
 	n, err := db.Get("test")
 	require.NoError(t, err)
-	assert.Equal(t, "value", n.Value)
+	assert.Equal(t, "value", n.Value())
 }
 
 func TestGetDoesNotExist(t *testing.T) {
-	db := NewDB()
+	db := NewStorage()
 
 	_, err := db.Get("test")
-	assert.Equal(t, err, ErrKeyNotFound)
+	assert.Equal(t, err, storage.ErrKeyNotFound)
 }
 
 func TestDel(t *testing.T) {
 	require := require.New(t)
 
-	db := NewDB()
+	db := NewStorage()
 
-	db.Set("test", NewNode("value"))
+	db.Set("test", storage.NewNode("value"))
 
 	_, err := db.Get("test")
 	require.NoError(err)
@@ -37,11 +38,11 @@ func TestDel(t *testing.T) {
 	require.Equal(1, db.Del("test"))
 
 	_, err = db.Get("test")
-	assert.Equal(t, err, ErrKeyNotFound)
+	assert.Equal(t, err, storage.ErrKeyNotFound)
 }
 
 func TestDelDoesNotExist(t *testing.T) {
-	db := NewDB()
+	db := NewStorage()
 
 	assert.Equal(t, 0, db.Del("test"))
 }

@@ -1,4 +1,4 @@
-package main
+package resp
 
 const (
 	TypeSimpleString byte = '+'
