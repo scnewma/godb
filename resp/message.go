@@ -3,7 +3,7 @@ package resp
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	"errors"
 	"strconv"
 )
 
@@ -19,6 +19,8 @@ const (
 
 var (
 	crlf = []byte{'\r', '\n'}
+
+	ErrUnrecognizedType = errors.New("unrecognized type")
 )
 
 type Message interface {
@@ -39,7 +41,11 @@ func ParseMessage(b []byte) (Message, error) {
 }
 
 func ReadMessage(buf *bufio.Reader) (Message, error) {
-	typ, _ := buf.ReadByte()
+	typ, err := buf.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+
 	var m Message
 	switch t := Type(typ); t {
 	case TypeSimpleString:
@@ -53,7 +59,7 @@ func ReadMessage(buf *bufio.Reader) (Message, error) {
 	case TypeArray:
 		m = new(Array)
 	default:
-		return nil, fmt.Errorf("unrecognized type: %s", string(t))
+		return nil, ErrUnrecognizedType
 	}
 
 	if err := m.unmarshal(buf); err != nil {
@@ -139,7 +145,12 @@ func (i *Int) marshal() ([]byte, error) {
 }
 
 func (i *Int) unmarshal(buf *bufio.Reader) error {
-	i.Value, _ = readInt(buf)
+	v, err := readInt(buf)
+	if err != nil {
+		return err
+	}
+
+	i.Value = v
 
 	return nil
 }

@@ -2,34 +2,39 @@ package resp
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"net"
+	"time"
+)
+
+const (
+	idleTimeout = 60 * time.Second
 )
 
 type conn struct {
 	server *server
 
 	rwc net.Conn
-
-	bufr *bufio.Reader
-	bufw *bufio.Writer
 }
 
-func (c *conn) serve(ctx context.Context) {
-	ctx, cancelCtx := context.WithCancel(ctx)
-	defer cancelCtx()
+func (c *conn) serve() {
+	defer c.rwc.Close()
+	c.rwc.SetReadDeadline(time.Now().Add(idleTimeout))
 
-	c.bufr = bufio.NewReader(c.rwc)
-	c.bufw = bufio.NewWriter(c.rwc)
+	bufr := bufio.NewReader(c.rwc)
+	bufw := bufio.NewWriter(c.rwc)
 
-	respw := NewWriter(c.bufw)
+	respw := NewWriter(bufw)
 
 	for {
-		msg, err := ReadMessage(c.bufr)
+		msg, err := ReadMessage(bufr)
 		if err != nil {
 			respw.WriteMessage(&Error{err.Error()})
-			continue
+
+			// this will close the connection if the read deadline
+			// is exceeded or the client passes in an unparseable
+			// message.
+			break
 		}
 
 		arr, ok := msg.(*Array)
@@ -41,7 +46,9 @@ func (c *conn) serve(ctx context.Context) {
 			RawMessage: arr,
 		})
 
-		c.bufw.Flush()
+		bufw.Flush()
+
+		c.rwc.SetReadDeadline(time.Now().Add(idleTimeout))
 	}
 }
 
@@ -114,7 +121,6 @@ func (srv *server) ListenAndServe() error {
 }
 
 func (srv *server) Serve(ln net.Listener) error {
-	ctx := context.Background()
 	for {
 		rw, err := ln.Accept()
 		if err != nil {
@@ -122,7 +128,7 @@ func (srv *server) Serve(ln net.Listener) error {
 		}
 
 		c := srv.newConn(rw)
-		go c.serve(ctx)
+		go c.serve()
 	}
 }
 
