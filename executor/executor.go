@@ -15,7 +15,8 @@ const (
 	DEL = "DEL"
 )
 
-var genericErrorMessage = resp.NewErrorMessage("something went wrong")
+// var genericErrorMessage = resp.NewErrorMessage("something went wrong")
+var genericErrorMessage = &resp.Error{"something went wrong"}
 
 type Command struct {
 	Name string
@@ -23,7 +24,7 @@ type Command struct {
 }
 
 type Executor interface {
-	Execute(command Command) *resp.Message
+	Execute(command Command) resp.Message
 }
 
 type compositeExecutor struct {
@@ -43,17 +44,17 @@ func NewExecutor(db storage.Storage) *compositeExecutor {
 	}
 }
 
-func (ce *compositeExecutor) Execute(command Command) *resp.Message {
+func (ce *compositeExecutor) Execute(command Command) resp.Message {
 	commandName := strings.ToUpper(command.Name)
 	executorFunc, ok := ce.executorLookup[commandName]
 	if !ok {
-		return resp.NewErrorMessage("unknown command")
+		return &resp.Error{"unknown command"}
 	}
 
 	return executorFunc(command.Args, ce.db)
 }
 
-type executorFunc func(args [][]byte, db storage.Storage) *resp.Message
+type executorFunc func(args [][]byte, db storage.Storage) resp.Message
 
 type argExtractor struct {
 	args [][]byte
@@ -86,47 +87,47 @@ func (e *argExtractor) Error() string {
 	return e.err.Error()
 }
 
-func executeGet(args [][]byte, db storage.Storage) *resp.Message {
+func executeGet(args [][]byte, db storage.Storage) resp.Message {
 	ae := newArgExtractor(args)
 	key := ae.ExtractStringAt(0)
 	if ae.Err() != nil {
-		return resp.NewErrorMessage(ae.Error())
+		return &resp.Error{ae.Error()}
 	}
 
 	node, err := db.Get(key)
 	if err != nil {
 		if err == storage.ErrKeyNotFound {
-			return resp.NewNilBulkStringMessage()
+			return &resp.BulkString{}
 		}
 
 		return genericErrorMessage
 	}
 
-	return resp.NewBulkStringMessage(node.Value().([]byte))
+	return &resp.BulkString{node.Value().([]byte)}
 }
 
-func executeSet(args [][]byte, db storage.Storage) *resp.Message {
+func executeSet(args [][]byte, db storage.Storage) resp.Message {
 	ae := newArgExtractor(args)
 	key := ae.ExtractStringAt(0)
 	val := ae.ExtractAt(1)
 
 	if ae.Err() != nil {
-		return resp.NewErrorMessage(ae.Error())
+		return &resp.Error{ae.Error()}
 	}
 
 	db.Set(key, storage.NewNode(val))
 
-	return resp.NewSimpleStringMessage("OK")
+	return &resp.SimpleString{"OK"}
 }
 
-func executeDel(args [][]byte, db storage.Storage) *resp.Message {
+func executeDel(args [][]byte, db storage.Storage) resp.Message {
 	ae := newArgExtractor(args)
 	key := ae.ExtractStringAt(0)
 	if ae.Err() != nil {
-		return resp.NewErrorMessage(ae.Error())
+		return &resp.Error{ae.Error()}
 	}
 
 	delCount := db.Del(key)
 
-	return resp.NewIntMessage(int64(delCount))
+	return &resp.Int{int64(delCount)}
 }

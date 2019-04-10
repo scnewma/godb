@@ -3,14 +3,14 @@ package resptest
 import "github.com/scnewma/godb/resp"
 
 type ResponseRecorder struct {
-	Messages []*resp.Message
+	Messages []resp.Message
 }
 
 func NewRecorder() *ResponseRecorder {
 	return &ResponseRecorder{}
 }
 
-func (rr *ResponseRecorder) WriteMessage(msg *resp.Message) error {
+func (rr *ResponseRecorder) WriteMessage(msg resp.Message) error {
 	rr.Messages = append(rr.Messages, msg)
 	return nil
 }
@@ -21,7 +21,7 @@ func (rr *ResponseRecorder) WriteMessage(msg *resp.Message) error {
 //
 // Returns nil if idx is greater than the number of recorded
 // messages.
-func (rr *ResponseRecorder) MessageAt(idx int) *resp.Message {
+func (rr *ResponseRecorder) MessageAt(idx int) resp.Message {
 	if idx >= len(rr.Messages) {
 		return nil
 	}

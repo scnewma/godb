@@ -23,18 +23,22 @@ func (c *conn) serve(ctx context.Context) {
 	c.bufr = bufio.NewReader(c.rwc)
 	c.bufw = bufio.NewWriter(c.rwc)
 
-	parser := NewParser(c.bufr)
 	respw := NewWriter(c.bufw)
 
 	for {
-		msg, err := parser.Parse()
+		msg, err := ReadMessage(c.bufr)
 		if err != nil {
-			respw.WriteMessage(NewErrorMessage(err.Error()))
+			respw.WriteMessage(&Error{err.Error()})
 			continue
 		}
 
+		arr, ok := msg.(*Array)
+		if !ok {
+			respw.WriteMessage(&Error{"invalid command"})
+		}
+
 		c.server.Handler.Serve(respw, &Request{
-			RawMessage: msg,
+			RawMessage: arr,
 		})
 
 		c.bufw.Flush()
@@ -42,28 +46,25 @@ func (c *conn) serve(ctx context.Context) {
 }
 
 type Request struct {
-	RawMessage *Message
+	RawMessage *Array
 
 	command string
 	args    [][]byte
 }
 
 func (r *Request) ParseCommand() error {
-	if r.RawMessage.Type != TypeArray {
-		return errors.New("invalid command")
-	}
-
-	for i, msg := range r.RawMessage.Array {
-		if msg.Type != TypeBulkString {
+	for i, a := range r.RawMessage.Value {
+		bs, ok := a.(*BulkString)
+		if !ok {
 			return errors.New("invalid command")
 		}
 
 		if i == 0 {
-			r.command = string(msg.Bulk)
+			r.command = string(bs.Value)
 			continue
 		}
 
-		r.args = append(r.args, msg.Bulk)
+		r.args = append(r.args, bs.Value)
 	}
 
 	return nil
@@ -86,7 +87,7 @@ func (r *Request) Args() [][]byte {
 }
 
 type ResponseWriter interface {
-	WriteMessage(*Message) error
+	WriteMessage(Message) error
 }
 
 type HandlerFunc func(ResponseWriter, *Request)

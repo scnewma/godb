@@ -11,11 +11,11 @@ import (
 func TestGetSet(t *testing.T) {
 	db := NewStorage()
 
-	db.Set("test", storage.NewNode("value"))
+	db.Set("test", storage.NewStringNode("value"))
 
 	n, err := db.Get("test")
 	require.NoError(t, err)
-	assert.Equal(t, "value", n.Value())
+	assert.Equal(t, []byte("value"), n.Value())
 }
 
 func TestGetDoesNotExist(t *testing.T) {
@@ -30,7 +30,7 @@ func TestDel(t *testing.T) {
 
 	db := NewStorage()
 
-	db.Set("test", storage.NewNode("value"))
+	db.Set("test", storage.NewStringNode("value"))
 
 	_, err := db.Get("test")
 	require.NoError(err)

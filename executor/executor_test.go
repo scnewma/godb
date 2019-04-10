@@ -25,7 +25,7 @@ func TestGet(t *testing.T) {
 	msg := executeGet(args, db)
 
 	assert.True(called)
-	assert.Equal(resp.NewBulkStringMessage([]byte("value")), msg)
+	assert.Equal(&resp.BulkString{[]byte("value")}, msg)
 }
 
 func TestGetNotFound(t *testing.T) {
@@ -44,7 +44,7 @@ func TestGetNotFound(t *testing.T) {
 	msg := executeGet(args, db)
 
 	assert.True(called)
-	assert.Equal(resp.NewNilBulkStringMessage(), msg)
+	assert.Equal(&resp.BulkString{}, msg)
 }
 
 func TestGetNoKey(t *testing.T) {
@@ -57,7 +57,10 @@ func TestGetNoKey(t *testing.T) {
 	}
 	msg := executeGet([][]byte{}, db)
 
-	assert.True(strings.Contains(msg.Error, "not enough arguments"))
+	err, ok := msg.(*resp.Error)
+	assert.True(ok)
+
+	assert.True(strings.Contains(err.Value, "not enough arguments"))
 }
 
 func TestSet(t *testing.T) {
@@ -75,7 +78,7 @@ func TestSet(t *testing.T) {
 	msg := executeSet(args, db)
 
 	assert.True(called)
-	assert.Equal(resp.NewSimpleStringMessage("OK"), msg)
+	assert.Equal(&resp.SimpleString{"OK"}, msg)
 }
 
 func TestSetNoKey(t *testing.T) {
@@ -87,7 +90,10 @@ func TestSetNoKey(t *testing.T) {
 	}
 	msg := executeSet([][]byte{}, db)
 
-	assert.True(strings.Contains(msg.Error, "not enough arguments"))
+	err, ok := msg.(*resp.Error)
+	assert.True(ok)
+
+	assert.True(strings.Contains(err.Value, "not enough arguments"))
 }
 
 func TestSetNoVal(t *testing.T) {
@@ -99,7 +105,10 @@ func TestSetNoVal(t *testing.T) {
 	}
 	msg := executeSet(asArgs("key"), db)
 
-	assert.True(strings.Contains(msg.Error, "not enough arguments"))
+	err, ok := msg.(*resp.Error)
+	assert.True(ok)
+
+	assert.True(strings.Contains(err.Value, "not enough arguments"))
 }
 
 func TestDel(t *testing.T) {
@@ -118,7 +127,7 @@ func TestDel(t *testing.T) {
 	msg := executeDel(args, db)
 
 	assert.True(called)
-	assert.Equal(resp.NewIntMessage(1), msg)
+	assert.Equal(&resp.Int{1}, msg)
 }
 
 func TestDelNoKey(t *testing.T) {
@@ -131,7 +140,10 @@ func TestDelNoKey(t *testing.T) {
 	}
 	msg := executeDel([][]byte{}, db)
 
-	assert.True(strings.Contains(msg.Error, "not enough arguments"))
+	err, ok := msg.(*resp.Error)
+	assert.True(ok)
+
+	assert.True(strings.Contains(err.Value, "not enough arguments"))
 }
 
 func asArgs(argStrs ...string) [][]byte {
