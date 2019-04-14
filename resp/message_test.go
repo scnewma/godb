@@ -3,6 +3,8 @@ package resp
 import (
 	"bufio"
 	"bytes"
+	"io"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -20,12 +22,20 @@ func TestParseMessage(t *testing.T) {
 	}{
 		{"SimpleString", []byte("+OK\r\n"), expected{&SimpleString{Value: "OK"}, nil}},
 		{"Blank SimpleString", []byte("+\r\n"), expected{&SimpleString{Value: ""}, nil}},
+		{"Malformed SimpleString", []byte("+OK"), expected{nil, io.EOF}},
 		{"Error", []byte("-Error message\r\n"), expected{&Error{Value: "Error message"}, nil}},
 		{"Blank Error", []byte("-\r\n"), expected{&Error{Value: ""}, nil}},
+		{"Malformed Error", []byte("-Error message"), expected{nil, io.EOF}},
 		{"Int", []byte(":1000\r\n"), expected{&Int{Value: 1000}, nil}},
+		{"Negative Int", []byte(":-1000\r\n"), expected{&Int{Value: -1000}, nil}},
+		{"Malformed Int (not number)", []byte(":1a00\r\n"), expected{nil, strconv.ErrSyntax}},
+		{"Malformed Int", []byte(":1000"), expected{nil, io.EOF}},
 		{"Bulk String", []byte("$6\r\nfoobar\r\n"), expected{&BulkString{Value: []byte("foobar")}, nil}},
 		{"Empty Bulk String", []byte("$0\r\n\r\n"), expected{&BulkString{Value: []byte("")}, nil}},
 		{"Null Bulk String", []byte("$-1\r\n"), expected{&BulkString{Value: nil}, nil}},
+		{"Malformed Bulk String", []byte("$0"), expected{nil, io.EOF}},
+		{"Malformed Bulk String (length)", []byte("$7\r\nfoobar\r\n"), expected{nil, io.ErrUnexpectedEOF}},
+		{"Malformed Bulk String (message)", []byte("$5\r\nfoobar\r\n"), expected{nil, ErrInvalidMessage}},
 		{"Array", []byte("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"), expected{
 			&Array{Value: []Message{
 				&BulkString{Value: []byte("foo")},
@@ -45,6 +55,9 @@ func TestParseMessage(t *testing.T) {
 				&BulkString{[]byte("bar")},
 			}}, nil},
 		},
+		{"Malformed Array", []byte("*0"), expected{nil, io.EOF}},
+		{"Malformed Array (length)", []byte("*4\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n"), expected{nil, io.EOF}},
+		{"Unrecognized type", []byte("#yolo"), expected{nil, ErrUnrecognizedType}},
 	}
 
 	for _, tt := range tests {
@@ -163,11 +176,12 @@ var bbuf []byte
 func benchmarkParseMessage(msg string, b *testing.B) {
 	var m Message
 
-	bbuf := bytes.NewBuffer([]byte(msg))
+	bb := []byte(msg)
+	bbuf := bytes.NewBuffer(bb)
 	buf := bufio.NewReader(bbuf)
 
 	for i := 0; i < b.N; i++ {
-		buf.Reset(bbuf)
+		buf.Reset(bytes.NewBuffer(bb))
 
 		m, _ = ReadMessage(buf)
 	}

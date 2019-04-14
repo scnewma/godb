@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"io"
 	"strconv"
 )
 
@@ -21,6 +22,7 @@ var (
 	crlf = []byte{'\r', '\n'}
 
 	ErrUnrecognizedType = errors.New("unrecognized type")
+	ErrInvalidMessage   = errors.New("invalid message")
 )
 
 type Message interface {
@@ -192,8 +194,10 @@ func (b *BulkString) unmarshal(buf *bufio.Reader) error {
 		return err
 	}
 
-	// discard CRLF
-	buf.Discard(2)
+	err = consumeCRLF(buf)
+	if err != nil {
+		return err
+	}
 
 	b.Value = bulk
 
@@ -275,7 +279,12 @@ func readInt(buf *bufio.Reader) (int64, error) {
 			break
 		}
 
-		n = (n * 10) + int64(rune(b)-'0')
+		rb := rune(b)
+		if rb < '0' || rb > '9' {
+			return 0, strconv.ErrSyntax
+		}
+
+		n = (n * 10) + int64(rb-'0')
 	}
 
 	if negative {
@@ -293,7 +302,30 @@ func readNext(buf *bufio.Reader, bLen int64) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		if b == '\r' || b == '\n' {
+			return nil, io.ErrUnexpectedEOF
+		}
 		bbuf[i] = b
 	}
 	return bbuf, nil
+}
+
+func consumeCRLF(buf *bufio.Reader) error {
+	b, err := buf.ReadByte()
+	if err != nil {
+		return err
+	}
+	if b != '\r' {
+		return ErrInvalidMessage
+	}
+
+	b, err = buf.ReadByte()
+	if err != nil {
+		return err
+	}
+	if b != '\n' {
+		return ErrInvalidMessage
+	}
+
+	return nil
 }
