@@ -1,6 +1,8 @@
 package resp
 
 import (
+	"bufio"
+	"bytes"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,4 +106,45 @@ func TestMarshalMessage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func BenchmarkParseSimpleString(b *testing.B) {
+	benchmarkParseMessage("+OK\r\n", b)
+}
+
+func BenchmarkParseError(b *testing.B) {
+	benchmarkParseMessage("-Error message\r\n", b)
+}
+
+func BenchmarkParseInt(b *testing.B) {
+	benchmarkParseMessage(":1000\r\n", b)
+}
+
+func BenchmarkParseBulkString(b *testing.B) {
+	benchmarkParseMessage("$6\r\nfoobar\r\n", b)
+}
+
+func BenchmarkParseArray(b *testing.B) {
+	benchmarkParseMessage("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", b)
+}
+
+var message Message
+
+func benchmarkParseMessage(msg string, b *testing.B) {
+	var m Message
+
+	bbuf := bytes.NewBuffer([]byte(msg))
+	buf := bufio.NewReader(bbuf)
+
+	for i := 0; i < b.N; i++ {
+		buf.Reset(bbuf)
+
+		m, _ = ReadMessage(buf)
+	}
+
+	message = m
+}
+
+func newReader(msg string) *bufio.Reader {
+	return bufio.NewReaderSize(bytes.NewBuffer([]byte(msg)), 512)
 }
