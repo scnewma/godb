@@ -164,16 +164,15 @@ var _ Message = &BulkString{}
 func (b *BulkString) Type() Type { return TypeBulkString }
 
 func (b *BulkString) marshal() ([]byte, error) {
+	if b.Value == nil {
+		return []byte("$-1\r\n"), nil
+	}
+
 	var buf bytes.Buffer
 	buf.WriteByte(byte(b.Type()))
-
-	if b.Value == nil {
-		buf.WriteString("-1")
-	} else {
-		buf.WriteString(strconv.Itoa(len(b.Value)))
-		buf.Write(crlf)
-		buf.Write(b.Value)
-	}
+	buf.WriteString(strconv.Itoa(len(b.Value)))
+	buf.Write(crlf)
+	buf.Write(b.Value)
 	buf.Write(crlf)
 
 	return buf.Bytes(), nil
@@ -212,20 +211,19 @@ var _ Message = &Array{}
 func (a *Array) Type() Type { return TypeArray }
 
 func (a *Array) marshal() ([]byte, error) {
+	if a.Value == nil {
+		return []byte("*-1\r\n"), nil
+	}
+
 	var buf bytes.Buffer
 	buf.WriteByte(byte(a.Type()))
 
-	if a.Value == nil {
-		buf.WriteString("-1")
-		buf.Write(crlf)
-	} else {
-		buf.WriteString(strconv.Itoa(len(a.Value)))
-		buf.Write(crlf)
+	buf.WriteString(strconv.Itoa(len(a.Value)))
+	buf.Write(crlf)
 
-		for _, m := range a.Value {
-			b, _ := m.marshal()
-			buf.Write(b)
-		}
+	for _, m := range a.Value {
+		b, _ := m.marshal()
+		buf.Write(b)
 	}
 
 	return buf.Bytes(), nil

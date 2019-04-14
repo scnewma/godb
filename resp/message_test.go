@@ -35,6 +35,9 @@ func TestParseMessage(t *testing.T) {
 		{"Empty Array", []byte("*0\r\n"), expected{
 			&Array{Value: []Message{}}, nil},
 		},
+		{"Null Array", []byte("*-1\r\n"), expected{
+			&Array{Value: nil}, nil},
+		},
 		{"Null Elements in Array", []byte("*3\r\n$3\r\nfoo\r\n$-1\r\n$3\r\nbar\r\n"), expected{
 			&Array{Value: []Message{
 				&BulkString{[]byte("foo")},
@@ -84,6 +87,7 @@ func TestMarshalMessage(t *testing.T) {
 		}}, expected{[]byte("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"), nil},
 		},
 		{"Empty Array", &Array{Value: []Message{}}, expected{[]byte("*0\r\n"), nil}},
+		{"Null Array", &Array{Value: nil}, expected{[]byte("*-1\r\n"), nil}},
 		{"Null Elements in Array", &Array{Value: []Message{
 			&BulkString{[]byte("foo")},
 			&BulkString{},
@@ -128,7 +132,33 @@ func BenchmarkParseArray(b *testing.B) {
 	benchmarkParseMessage("*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n", b)
 }
 
+func BenchmarkMarshalSimpleString(b *testing.B) {
+	benchmarkMarshalMessage(&SimpleString{"OK"}, b)
+}
+
+func BenchmarkMarshalError(b *testing.B) {
+	benchmarkMarshalMessage(&Error{"Error message"}, b)
+}
+
+func BenchmarkMarshalInt(b *testing.B) {
+	benchmarkMarshalMessage(&Int{1000}, b)
+}
+
+func BenchmarkMarshalBulkString(b *testing.B) {
+	benchmarkMarshalMessage(&BulkString{[]byte("foobar")}, b)
+}
+
+func BenchmarkMarshalArray(b *testing.B) {
+	benchmarkMarshalMessage(&Array{
+		[]Message{
+			&BulkString{[]byte("foo")},
+			&BulkString{[]byte("bar")},
+		},
+	}, b)
+}
+
 var message Message
+var bbuf []byte
 
 func benchmarkParseMessage(msg string, b *testing.B) {
 	var m Message
@@ -145,6 +175,12 @@ func benchmarkParseMessage(msg string, b *testing.B) {
 	message = m
 }
 
-func newReader(msg string) *bufio.Reader {
-	return bufio.NewReaderSize(bytes.NewBuffer([]byte(msg)), 512)
+func benchmarkMarshalMessage(msg Message, b *testing.B) {
+	var bb []byte
+
+	for i := 0; i < b.N; i++ {
+		bb, _ = MarshalMessage(msg)
+	}
+
+	bbuf = bb
 }
