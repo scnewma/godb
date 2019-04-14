@@ -47,7 +47,7 @@ func ReadMessage(buf *bufio.Reader) (Message, error) {
 	}
 
 	var m Message
-	switch t := Type(typ); t {
+	switch Type(typ) {
 	case TypeSimpleString:
 		m = new(SimpleString)
 	case TypeError:
@@ -78,7 +78,6 @@ var _ Message = &SimpleString{}
 func (ss *SimpleString) Type() Type { return TypeSimpleString }
 
 func (ss *SimpleString) marshal() ([]byte, error) {
-	// TODO: probably don't need a bytes buffer here
 	var buf bytes.Buffer
 	buf.WriteByte(byte(ss.Type()))
 	buf.WriteString(ss.Value)
@@ -107,7 +106,6 @@ var _ Message = &Error{}
 func (e *Error) Type() Type { return TypeError }
 
 func (e *Error) marshal() ([]byte, error) {
-	// TODO: need bytes.Buffer?
 	var buf bytes.Buffer
 	buf.WriteByte(byte(e.Type()))
 	buf.WriteString(e.Value)
